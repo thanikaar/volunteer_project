@@ -788,6 +788,11 @@ class ViennaFestival(Experiment):
                     self.clearItems()
                     return
 
+                gazeEvents = self.eyetracker.getEvents()
+                for evt in gazeEvents:
+                    row = gazeEventToRow(evt, trialNumber, "attentionGetter")
+                    collecting_data.append(row)
+
                 self.drawFlip()
 
             self.items.remove(attention)
@@ -814,14 +819,18 @@ class ViennaFestival(Experiment):
                     self.eyetracker.setRecordingState(False)
                     self.clearItems()
                     return
+
+                gazeEvents = self.eyetracker.getEvents()
+                for evt in gazeEvents:
+                    row = gazeEventToRow(evt, trialNumber, "movie")
+                    collecting_data.append(row)
                 self.drawFlip()
 
             movie.pause()
 
-            # Write data at the end of the trial
-
             # this is the tobii version
 
+            # Write data at the end of the trial
             #if self.eyetracker:
                 #self.eyetracker.setCurrentEvent("endTrial")
                 #self.eyetracker.writeToFile(experimentFile, 1,1,trialNumber)
@@ -836,6 +845,17 @@ class ViennaFestival(Experiment):
         if self.eyetracker:
             self.eyetracker.setRecordingState(False)
 
+        # updated version
+
+        # Write data at the end of the trial
+        data_df = pd.DataFrame(collecting_data) # this uses dict keys as column names 
+        os.makedirs("Data", exist_ok=True)
+
+        dateTime = str(datetime.datetime.now())[:10] + "_" + str(datetime.datetime.now())[11:13] + "." + str(datetime.datetime.now())[14:16]
+        experimentFile = os.path.join("Data", "S1" + "_" + dateTime + "_eyeData.csv")
+
+        data_df.to_csv(experimentFile, index=False)
+        
         pause()
 
         # =============================================================================
