@@ -758,7 +758,7 @@ class ViennaFestival(Experiment):
         dateTime = str(datetime.datetime.now())[:10] + "_" + str(datetime.datetime.now())[11:13] + "." + str(datetime.datetime.now())[14:16]
         experimentFile = os.path.join("Data", "S1" + "_" + dateTime + "_eyeData.csv")
         os.makedirs("Data", exist_ok=True)
-        print(f"DEBUG: bananas() will write gaze data to: {os.path.abspath(experimentFile)}")
+
  
         quit_early = False
  
@@ -797,11 +797,7 @@ class ViennaFestival(Experiment):
                         break
  
                     frameCount += 1
-                    if movie.status != lastStatus:  # DEBUG: log every status change, not just every 60 frames
-                        print(f"DEBUG trial={trialNumber} frame={frameCount} movie.status CHANGED {lastStatus} -> {movie.status} (FINISHED={constants.FINISHED})")
-                        lastStatus = movie.status
-                    if frameCount % 60 == 0:  # TEMPORARY - remove once diagnosed
-                        print(f"DEBUG trial={trialNumber} frame={frameCount} movie.status={movie.status} isFinished={getattr(movie, 'isFinished', 'n/a')} (FINISHED={constants.FINISHED}) duration={movie.duration}")
+                    
  
                     row = gazePositionToRow(trialNumber, "movie")
                     collecting_data.append(row)
@@ -839,7 +835,7 @@ class ViennaFestival(Experiment):
  
             data_df = pd.DataFrame(collecting_data)  # this uses dict keys as column names
             data_df.to_csv(experimentFile, index=False)
-            print(f"DEBUG: wrote {len(collecting_data)} rows to {experimentFile}")
+
  
         if quit_early:
             self.clearItems()
@@ -934,10 +930,19 @@ class ViennaFestival(Experiment):
  
         # Original design (for a 1920x1080 screen): play window = left 600px column,
         # pause window = right 600px column (starting at x=1320), movie window
-        # centered at 960x540. Scaled here to match the actual screen size.
-        sideWidth = int(round(screenW * (600/1920)))
+        # centered at 960x540. Note 600 + 960 + 600 = 2160, which is already
+        # 240px WIDER than the 1920px screen it was designed for - so the three
+        # windows overlapped even before any scaling was applied.
+        #
+        # Fix: keep the same relative proportions (600 : 960 : 600) but normalize
+        # them against their own total (2160) rather than against screenW, so
+        # sideWidth*2 + movieWidth always sums to exactly screenW on any monitor.
+        # That guarantees the play/movie/pause windows sit edge-to-edge with zero
+        # overlap, however big or small the detected screen is.
+        designTotalWidth = 600 + 960 + 600  # = 2160, the reference proportions above
+        sideWidth = int(round(screenW * (600 / designTotalWidth)))
+        movieWidth = int(round(screenW * (960 / designTotalWidth)))
         sideHeight = screenH  # side windows always span the full screen height, as in the original design
-        movieWidth = int(round(screenW * (960/1920)))
         movieHeight = int(round(screenH * (540/1080)))
  
         playWindow = visual.Window(size = (sideWidth, sideHeight),
