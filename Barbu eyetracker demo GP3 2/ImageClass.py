@@ -739,80 +739,97 @@ class ViennaFestival(Experiment):
             self.eyetracker.setRecordingState(True)
             self.eyetracker.enableEventReporting(True)
  
-        movie1 = visual.MovieStim(self.psychopyWindow,
-                                     self.movieFolder + 'fam.mov',
-                                     size = (1920, 1080))
- 
-        movie2 = visual.MovieStim(self.psychopyWindow,
-                                 self.movieFolder + 'test1.mov',
-                                 size = (1920, 1080))
- 
-        movie3 = visual.MovieStim(self.psychopyWindow,
-                                 self.movieFolder + 'test2.mov',
-                                 size = (1920, 1080))
+        # NOTE: movies are now created lazily, one per trial, inside the loop
+        # below (see movieFilenames). Creating all three MovieStim objects up
+        # front (old code) started all three decoders immediately, but only
+        # the active one was ever drawn/consumed each trial - the other two
+        # sat idle with a filling frame buffer, which is what caused the
+        # freeze right after trial 1 finished and trial 2 tried to play.
+        movieFilenames = {1: 'fam.mov', 2: 'test1.mov', 3: 'test2.mov'}
  
         collecting_data = []
  
-        # For-loop for all trials
-        for trialNumber in range(1, 4):
-            # ====================================================================
-            # MOVIE
-            # ====================================================================
-            #if self.eyetracker:                    #TODO FIX
-                #self.eyetracker.setCurrentEvent("movie")
- 
-            done = False
- 
-            if trialNumber == 1:
-                movie = movie1
-            elif trialNumber == 2:
-                movie = movie2
-            else:
-                movie = movie3
- 
-            self.items.append(movie)
- 
-            frameCount = 0
-            while movie.status != constants.FINISHED and not done:
-                keys = event.getKeys(['q'])
-                if 'q' in keys:
-                    self.eyetracker.setRecordingState(False)
-                    self.clearItems()
-                    return
- 
-                frameCount += 1
-                if frameCount % 60 == 0:  # TEMPORARY - remove once diagnosed
-                    print(f"DEBUG trial={trialNumber} frame={frameCount} movie.status={movie.status} (FINISHED={constants.FINISHED}) duration={movie.duration}")
- 
-                row = gazePositionToRow(trialNumber, "movie")
-                collecting_data.append(row)
-                self.drawFlip()
- 
-            movie.pause()
- 
-            # OLD (Tobii SDK) approach — kept for reference only, does not work with the
-            # iohub/Gazepoint tracker (writeToFile/setCurrentEvent don't exist on self.eyetracker).
-            # Superseded by collecting_data + gazePositionToRow() above and the CSV write below.
-            # Write data at the end of the trial
-            #if self.eyetracker:
-                #self.eyetracker.setCurrentEvent("endTrial")
-                #self.eyetracker.writeToFile(experimentFile, 1,1,trialNumber)
-                #self.eyetracker.setCurrentEvent("preTrial")
-                #self.eyetracker.updateSystemTimestamp()
-                #self.eyetracker.clearGazeData()
- 
-            self.items.remove(movie)
- 
-        if self.eyetracker:
-            self.eyetracker.setRecordingState(False)
- 
-        # Write the collected gaze data to a CSV file
+        # Build the output path up front and make sure Data/ exists BEFORE we
+        # start collecting, so we know where we're writing to no matter how
+        # this function exits (normal finish, 'q' quit, or an exception).
         dateTime = str(datetime.datetime.now())[:10] + "_" + str(datetime.datetime.now())[11:13] + "." + str(datetime.datetime.now())[14:16]
         experimentFile = os.path.join("Data", "S1" + "_" + dateTime + "_eyeData.csv")
- 
-        data_df = pd.DataFrame(collecting_data) # this uses dict keys as column names
         os.makedirs("Data", exist_ok=True)
-        data_df.to_csv(experimentFile, index=False)
+        print(f"DEBUG: bananas() will write gaze data to: {os.path.abspath(experimentFile)}")
+ 
+        quit_early = False
+ 
+        try:
+            # For-loop for all trials
+            for trialNumber in range(1, 4):
+                # ====================================================================
+                # MOVIE
+                # ====================================================================
+                #if self.eyetracker:                    #TODO FIX
+                    #self.eyetracker.setCurrentEvent("movie")
+ 
+                done = False
+ 
+                # Create this trial's movie now (lazily), not before the loop,
+                # so its decoder only starts once we're actually about to draw it.
+                movie = visual.MovieStim(self.psychopyWindow,
+                                          self.movieFolder + movieFilenames[trialNumber],
+                                          size = (1920, 1080))
+ 
+                self.items.append(movie)
+ 
+                frameCount = 0
+                while movie.status != constants.FINISHED and not done:
+                    keys = event.getKeys(['q'])
+                    if 'q' in keys:
+                        quit_early = True
+                        break
+ 
+                    frameCount += 1
+                    if frameCount % 60 == 0:  # TEMPORARY - remove once diagnosed
+                        print(f"DEBUG trial={trialNumber} frame={frameCount} movie.status={movie.status} (FINISHED={constants.FINISHED}) duration={movie.duration}")
+ 
+                    row = gazePositionToRow(trialNumber, "movie")
+                    collecting_data.append(row)
+                    self.drawFlip()
+ 
+                movie.pause()
+ 
+                # OLD (Tobii SDK) approach — kept for reference only, does not work with the
+                # iohub/Gazepoint tracker (writeToFile/setCurrentEvent don't exist on self.eyetracker).
+                # Superseded by collecting_data + gazePositionToRow() above and the CSV write below.
+                # Write data at the end of the trial
+                #if self.eyetracker:
+                    #self.eyetracker.setCurrentEvent("endTrial")
+                    #self.eyetracker.writeToFile(experimentFile, 1,1,trialNumber)
+                    #self.eyetracker.setCurrentEvent("preTrial")
+                    #self.eyetracker.updateSystemTimestamp()
+                    #self.eyetracker.clearGazeData()
+ 
+                self.items.remove(movie)
+                # Fully release this movie's decoder/thread before the next
+                # trial creates a new one, rather than leaving it paused.
+                try:
+                    movie.stop()
+                except Exception:
+                    pass
+ 
+                if quit_early:
+                    break
+ 
+        finally:
+            # This always runs — on normal completion, an early 'q' quit, or
+            # an exception — so we never silently lose the collected data.
+            if self.eyetracker:
+                self.eyetracker.setRecordingState(False)
+ 
+            data_df = pd.DataFrame(collecting_data)  # this uses dict keys as column names
+            data_df.to_csv(experimentFile, index=False)
+            print(f"DEBUG: wrote {len(collecting_data)} rows to {experimentFile}")
+ 
+        if quit_early:
+            self.clearItems()
+            return
  
         pause()
  
