@@ -775,9 +775,10 @@ class ViennaFestival(Experiment):
  
                 # Create this trial's movie now (lazily), not before the loop,
                 # so its decoder only starts once we're actually about to draw it.
+                # Size auto-detected from the actual window instead of hardcoded 1920x1080.
                 movie = visual.MovieStim(self.psychopyWindow,
                                           self.movieFolder + movieFilenames[trialNumber],
-                                          size = (1920, 1080))
+                                          size = self.psychopyWindow.size)
  
                 # Explicitly start playback. Relying on autoStart-on-first-draw
                 # is not reliable here - without this call, movie.status can
@@ -856,15 +857,15 @@ class ViennaFestival(Experiment):
  
         movie1 = visual.MovieStim(self.psychopyWindow,
                                      self.movieFolder + 'fam.mov',
-                                     size = (1920, 1080))
+                                     size = self.psychopyWindow.size)
  
         movie2 = visual.MovieStim(self.psychopyWindow,
                                  self.movieFolder + 'test1.mov',
-                                 size = (1920, 1080))
+                                 size = self.psychopyWindow.size)
  
         movie3 = visual.MovieStim(self.psychopyWindow,
                                  self.movieFolder + 'test2.mov',
-                                 size = (1920, 1080))
+                                 size = self.psychopyWindow.size)
  
  
         gazeDot = visual.Circle(self.psychopyWindow,
@@ -1117,7 +1118,7 @@ class ViennaFestival(Experiment):
         pauseWindow.close()
  
  
-        self.psychopyWindow = visual.Window(size = (1920, 1080),
+        self.psychopyWindow = visual.Window(size = (screenW, screenH),  # reuse the real screen size captured earlier in this method
                                        screen = 1, fullscr = True,
                                        units = 'height',
                                        color = 'black',
