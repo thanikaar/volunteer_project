@@ -622,10 +622,8 @@ class ViennaFestival(Experiment):
             if not np.isnan(avgx) and not np.isnan(avgy) and -0.75 < avgx < 0.75 and -0.5 < avgy < 0.5:
 
                 gazeCell = getGazeCell(avgx, avgy)
-                isValidMove = validGazeMove(gazeCell, currentAnimalCell)
-                print(f"DEBUG avgx={avgx:.3f} avgy={avgy:.3f} gazeCell={gazeCell} animalCell={currentAnimalCell} validMove={isValidMove}")  # TEMPORARY - remove once diagnosed
 
-                if isValidMove:
+                if validGazeMove(gazeCell, currentAnimalCell):
 
                     persist = checkPersistence(gazeCell)
                     if persist:
@@ -700,28 +698,24 @@ class ViennaFestival(Experiment):
 
             return (avgx, avgy)
 
-        def gazeEventToRow(evt, trialNumber, eventLabel):
-            lx = evt.left_gaze_x
-            ly = evt.left_gaze_y
-            rx = evt.right_gaze_x
-            ry = evt.right_gaze_y
+        def gazePositionToRow(trialNumber, eventLabel):
+            # NOTE: switched from self.eyetracker.getEvents() to getLastGazePosition(),
+            # because on this hardware getEvents() only ever produced FixationStart/EndEvent,
+            # never a raw binocular gaze sample - so getEvents() could never supply real data here.
+            # getLastGazePosition() is proven reliable elsewhere in this file (calibration, fruitMaze).
+            # Tradeoff: only one averaged (x,y) is available, not independent left/right eyes,
+            # so lv/rv and lx/ly/rx/ry are duplicated from that single position.
+            gpos = self.eyetracker.getLastGazePosition()
+            if type(gpos) in [tuple, list]:
+                avgx, avgy = gpos
+                v = 1
+                avgx = avgx/self.psychopyWindow.size[1]
+                avgy = avgy/self.psychopyWindow.size[1]
+            else:
+                avgx, avgy = np.nan, np.nan
+                v = 0
 
-            # 1. figure out lv/rv (1 if not NaN, else 0)
-            if not np.isnan(lx):
-                lv = 1
-            else:
-                lv = 0
-            if not np.isnan(rx):
-                rv = 1
-            else:
-                rv = 0
-            # 2. convert lx, ly, rx, ry into height-units (divide by 1080, same as everywhere else)
-            lx = lx/self.psychopyWindow.size[1]
-            ly = ly/self.psychopyWindow.size[1]
-            rx = rx/self.psychopyWindow.size[1]
-            ry = ry/self.psychopyWindow.size[1]
-            # 3. return a dict with keys: trialNumber, event, lv, rv, lx, ly, rx, ry
-            row_dict = {'trialNumber':trialNumber, 'event':eventLabel, 'lv':lv, 'rv':rv, 'lx':lx, 'ly':ly, 'rx':rx, 'ry':ry}
+            row_dict = {'trialNumber':trialNumber, 'event':eventLabel, 'lv':v, 'rv':v, 'lx':avgx, 'ly':avgy, 'rx':avgx, 'ry':avgy}
             return row_dict
 
 
@@ -758,7 +752,6 @@ class ViennaFestival(Experiment):
                                  size = (1920, 1080))
 
         collecting_data = []
-        seenEventTypes = set()  # TEMPORARY - remove once diagnosed
 
         # For-loop for all trials
         for trialNumber in range(1, 4):
@@ -783,16 +776,8 @@ class ViennaFestival(Experiment):
                     self.clearItems()
                     return
 
-                gazeEvents = self.eyetracker.getEvents()
-                for evt in gazeEvents:
-                    typeName = type(evt).__name__
-                    if typeName not in seenEventTypes:  # TEMPORARY - remove once diagnosed
-                        seenEventTypes.add(typeName)
-                        print(f"DEBUG new event type seen: {typeName}, fields: {getattr(evt, '_fields', 'n/a')}")
-                    if not hasattr(evt, 'left_gaze_x'):
-                        continue  # skip fixation events, only keep raw binocular gaze samples
-                    row = gazeEventToRow(evt, trialNumber, "attentionGetter")
-                    collecting_data.append(row)
+                row = gazePositionToRow(trialNumber, "attentionGetter")
+                collecting_data.append(row)
 
                 self.drawFlip()
 
@@ -821,23 +806,15 @@ class ViennaFestival(Experiment):
                     self.clearItems()
                     return
 
-                gazeEvents = self.eyetracker.getEvents()
-                for evt in gazeEvents:
-                    typeName = type(evt).__name__
-                    if typeName not in seenEventTypes:  # TEMPORARY - remove once diagnosed
-                        seenEventTypes.add(typeName)
-                        print(f"DEBUG new event type seen: {typeName}, fields: {getattr(evt, '_fields', 'n/a')}")
-                    if not hasattr(evt, 'left_gaze_x'):
-                        continue  # skip fixation events, only keep raw binocular gaze samples
-                    row = gazeEventToRow(evt, trialNumber, "movie")
-                    collecting_data.append(row)
+                row = gazePositionToRow(trialNumber, "movie")
+                collecting_data.append(row)
                 self.drawFlip()
 
             movie.pause()
 
             # OLD (Tobii SDK) approach — kept for reference only, does not work with the
             # iohub/Gazepoint tracker (writeToFile/setCurrentEvent don't exist on self.eyetracker).
-            # Superseded by collecting_data + gazeEventToRow() above and the CSV write below.
+            # Superseded by collecting_data + gazePositionToRow() above and the CSV write below.
             # Write data at the end of the trial
             #if self.eyetracker:
                 #self.eyetracker.setCurrentEvent("endTrial")
@@ -855,7 +832,6 @@ class ViennaFestival(Experiment):
         dateTime = str(datetime.datetime.now())[:10] + "_" + str(datetime.datetime.now())[11:13] + "." + str(datetime.datetime.now())[14:16]
         experimentFile = os.path.join("Data", "S1" + "_" + dateTime + "_eyeData.csv")
 
-        print(f"DEBUG total gaze rows collected: {len(collecting_data)}")  # TEMPORARY - remove once diagnosed
         data_df = pd.DataFrame(collecting_data) # this uses dict keys as column names
         os.makedirs("Data", exist_ok=True)
         data_df.to_csv(experimentFile, index=False)
