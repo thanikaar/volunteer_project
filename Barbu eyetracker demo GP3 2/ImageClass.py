@@ -755,33 +755,6 @@ class ViennaFestival(Experiment):
  
         # For-loop for all trials
         for trialNumber in range(1, 4):
-            attention = visual.MovieStim(self.psychopyWindow,
-                                         self.movieFolder + 'ball.mov',
-                                         size = (1920, 1080))
- 
- 
-            # ====================================================================
-            # ATTENTION GETTER
-            # ====================================================================
-            #if self.eyetracker:
-                #self.eyetracker.setCurrentEvent("attentionGetter") #TODO FIX
- 
- 
-            self.items.append(attention)
- 
-            while attention.status != constants.FINISHED:
-                keys = event.getKeys(['q'])
-                if 'q' in keys:
-                    self.eyetracker.setRecordingState(False)
-                    self.clearItems()
-                    return
- 
-                row = gazePositionToRow(trialNumber, "attentionGetter")
-                collecting_data.append(row)
- 
-                self.drawFlip()
- 
-            self.items.remove(attention)
             # ====================================================================
             # MOVIE
             # ====================================================================
@@ -877,10 +850,6 @@ class ViennaFestival(Experiment):
  
         # for-loop for all trials
         for trialNumber in range(1, 4):
-            attention = visual.MovieStim(self.psychopyWindow,
-                                         self.movieFolder + 'ball.mov',
-                                         size = (1920, 1080))
- 
             dfTrial = df.loc[df["trialNumber"] == trialNumber]
  
             if trialNumber == 1:
@@ -890,32 +859,9 @@ class ViennaFestival(Experiment):
             else:
                 movie = movie3
  
- 
-            # ====================================================================
-            # ATTENTION GETTER
-            # ====================================================================
-            dfAttention = dfTrial.loc[dfTrial["event"] == "attentionGetter"]
- 
-            self.items.append(attention)
- 
-            for index, row in dfAttention.iterrows():
-                keys = event.getKeys(['q'])
-                if 'q' in keys:
-                    self.clearItems()
-                    return
- 
-                gazeDot.pos = getGazePos(row)
-                attention.draw()
-                self.drawFlip()
- 
-            attention.pause()
- 
             # ====================================================================
             # MOVIE
             # ====================================================================
-            # self.items.insert(0, movie)
-            # self.items.remove(attention)
- 
             dfTest = dfTrial.loc[dfTrial["event"] == "movie"]
  
             for index, row in dfTest.iterrows():
