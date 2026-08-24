@@ -134,8 +134,8 @@ class ViennaFestival(Experiment):
                 gpos = self.eyetracker.getLastGazePosition()
                 if type(gpos) in [tuple, list]:
                     avgx, avgy = gpos
-                    avgx = avgx/1080
-                    avgy = avgy/1080
+                    avgx = avgx/self.psychopyWindow.size[1]
+                    avgy = avgy/self.psychopyWindow.size[1]
                     self.gazeDot.pos = (avgx, avgy)
                 else:
                     avgx, avgy = np.nan, np.nan
@@ -583,8 +583,8 @@ class ViennaFestival(Experiment):
                 gpos = self.eyetracker.getLastGazePosition()
                 if type(gpos) in [tuple, list]:
                     avgx, avgy = gpos
-                    avgx = avgx/1080
-                    avgy = avgy/1080
+                    avgx = avgx/self.psychopyWindow.size[1]
+                    avgy = avgy/self.psychopyWindow.size[1]
                     self.gazeDot.pos = (avgx, avgy)
 
                     currentCell = getGazeCell(avgx, avgy)
@@ -600,8 +600,8 @@ class ViennaFestival(Experiment):
             gpos = self.eyetracker.getLastGazePosition()
             if type(gpos) in [tuple, list]:
                 avgx, avgy = gpos
-                avgx = avgx/1080
-                avgy = avgy/1080
+                avgx = avgx/self.psychopyWindow.size[1]
+                avgy = avgy/self.psychopyWindow.size[1]
 
                 self.gazeDot.pos = (avgx, avgy)
 
@@ -622,8 +622,10 @@ class ViennaFestival(Experiment):
             if not np.isnan(avgx) and not np.isnan(avgy) and -0.75 < avgx < 0.75 and -0.5 < avgy < 0.5:
 
                 gazeCell = getGazeCell(avgx, avgy)
+                isValidMove = validGazeMove(gazeCell, currentAnimalCell)
+                print(f"DEBUG avgx={avgx:.3f} avgy={avgy:.3f} gazeCell={gazeCell} animalCell={currentAnimalCell} validMove={isValidMove}")  # TEMPORARY - remove once diagnosed
 
-                if validGazeMove(gazeCell, currentAnimalCell):
+                if isValidMove:
 
                     persist = checkPersistence(gazeCell)
                     if persist:
@@ -714,10 +716,10 @@ class ViennaFestival(Experiment):
             else:
                 rv = 0
             # 2. convert lx, ly, rx, ry into height-units (divide by 1080, same as everywhere else)
-            lx = lx/1080
-            ly = ly/1080
-            rx = rx/1080
-            ry = ry/1080
+            lx = lx/self.psychopyWindow.size[1]
+            ly = ly/self.psychopyWindow.size[1]
+            rx = rx/self.psychopyWindow.size[1]
+            ry = ry/self.psychopyWindow.size[1]
             # 3. return a dict with keys: trialNumber, event, lv, rv, lx, ly, rx, ry
             row_dict = {'trialNumber':trialNumber, 'event':eventLabel, 'lv':lv, 'rv':rv, 'lx':lx, 'ly':ly, 'rx':rx, 'ry':ry}
             return row_dict
@@ -756,6 +758,7 @@ class ViennaFestival(Experiment):
                                  size = (1920, 1080))
 
         collecting_data = []
+        seenEventTypes = set()  # TEMPORARY - remove once diagnosed
 
         # For-loop for all trials
         for trialNumber in range(1, 4):
@@ -782,6 +785,12 @@ class ViennaFestival(Experiment):
 
                 gazeEvents = self.eyetracker.getEvents()
                 for evt in gazeEvents:
+                    typeName = type(evt).__name__
+                    if typeName not in seenEventTypes:  # TEMPORARY - remove once diagnosed
+                        seenEventTypes.add(typeName)
+                        print(f"DEBUG new event type seen: {typeName}, fields: {getattr(evt, '_fields', 'n/a')}")
+                    if not hasattr(evt, 'left_gaze_x'):
+                        continue  # skip fixation events, only keep raw binocular gaze samples
                     row = gazeEventToRow(evt, trialNumber, "attentionGetter")
                     collecting_data.append(row)
 
@@ -814,6 +823,12 @@ class ViennaFestival(Experiment):
 
                 gazeEvents = self.eyetracker.getEvents()
                 for evt in gazeEvents:
+                    typeName = type(evt).__name__
+                    if typeName not in seenEventTypes:  # TEMPORARY - remove once diagnosed
+                        seenEventTypes.add(typeName)
+                        print(f"DEBUG new event type seen: {typeName}, fields: {getattr(evt, '_fields', 'n/a')}")
+                    if not hasattr(evt, 'left_gaze_x'):
+                        continue  # skip fixation events, only keep raw binocular gaze samples
                     row = gazeEventToRow(evt, trialNumber, "movie")
                     collecting_data.append(row)
                 self.drawFlip()
@@ -840,6 +855,7 @@ class ViennaFestival(Experiment):
         dateTime = str(datetime.datetime.now())[:10] + "_" + str(datetime.datetime.now())[11:13] + "." + str(datetime.datetime.now())[14:16]
         experimentFile = os.path.join("Data", "S1" + "_" + dateTime + "_eyeData.csv")
 
+        print(f"DEBUG total gaze rows collected: {len(collecting_data)}")  # TEMPORARY - remove once diagnosed
         data_df = pd.DataFrame(collecting_data) # this uses dict keys as column names
         os.makedirs("Data", exist_ok=True)
         data_df.to_csv(experimentFile, index=False)
@@ -945,6 +961,10 @@ class ViennaFestival(Experiment):
 
         print("Play/Pause Movie started. Press Q to go back to task choice.")
 
+        # Capture the real screen size BEFORE closing the window, so the layout
+        # below can scale to whatever monitor this actually runs on, instead of
+        # being hardcoded for a 1920x1080 screen.
+        screenW, screenH = self.psychopyWindow.size
 
         self.psychopyWindow.color = "white"
         self.psychopyWindow.close()
@@ -954,7 +974,15 @@ class ViennaFestival(Experiment):
 
         items = []
 
-        playWindow = visual.Window(size = (600, 1080),
+        # Original design (for a 1920x1080 screen): play window = left 600px column,
+        # pause window = right 600px column (starting at x=1320), movie window
+        # centered at 960x540. Scaled here to match the actual screen size.
+        sideWidth = int(round(screenW * (600/1920)))
+        sideHeight = screenH  # side windows always span the full screen height, as in the original design
+        movieWidth = int(round(screenW * (960/1920)))
+        movieHeight = int(round(screenH * (540/1080)))
+
+        playWindow = visual.Window(size = (sideWidth, sideHeight),
                                    pos = (0, 0),
                                     screen = 1, fullscr = False,
                                        units = 'height',
@@ -985,8 +1013,8 @@ class ViennaFestival(Experiment):
                                             fillColor = "black")
         items.append(playButton)
 
-        pauseWindow = visual.Window(size = (600, 1080),
-                                   pos = (1320, 0),
+        pauseWindow = visual.Window(size = (sideWidth, sideHeight),
+                                   pos = (screenW - sideWidth, 0),
                                     screen = 1, fullscr = False,
                                        units = 'height',
                                        color = 'white',
@@ -1025,7 +1053,8 @@ class ViennaFestival(Experiment):
                                         fillColor = "black")
         items.append(pauseButton2)
 
-        movieWindow = visual.Window(size = (960, 540),
+        movieWindow = visual.Window(size = (movieWidth, movieHeight),
+                                    pos = ((screenW - movieWidth)//2, (screenH - movieHeight)//2),
                                     screen = 1, fullscr = False,
                                        units = 'height',
                                        color = 'white',
@@ -1035,7 +1064,7 @@ class ViennaFestival(Experiment):
                                        allowGUI = False)
 
         movie = visual.MovieStim(movieWindow, self.movieFolder + movie,
-                                  loop = False, size = (960, 540))
+                                  loop = False, size = (movieWidth, movieHeight))
 
 
         def refresh():
@@ -1061,8 +1090,8 @@ class ViennaFestival(Experiment):
             gpos = self.eyetracker.getLastGazePosition()
             if type(gpos) in [tuple, list]:
                 avgx, avgy = gpos
-                avgx = avgx/1080
-                avgy = avgy/1080
+                avgx = avgx/self.psychopyWindow.size[1]
+                avgy = avgy/self.psychopyWindow.size[1]
             else:
                 avgx, avgy = np.nan, np.nan
 
@@ -1075,8 +1104,8 @@ class ViennaFestival(Experiment):
                     gpos = self.eyetracker.getLastGazePosition()
                     if type(gpos) in [tuple, list]:
                         avgx, avgy = gpos
-                        avgx = avgx/1080
-                        avgy = avgy/1080
+                        avgx = avgx/self.psychopyWindow.size[1]
+                        avgy = avgy/self.psychopyWindow.size[1]
                     else:
                         avgx, avgy = np.nan, np.nan
 
@@ -1105,8 +1134,8 @@ class ViennaFestival(Experiment):
                     gpos = self.eyetracker.getLastGazePosition()
                     if type(gpos) in [tuple, list]:
                         avgx, avgy = gpos
-                        avgx = avgx/1080
-                        avgy = avgy/1080
+                        avgx = avgx/self.psychopyWindow.size[1]
+                        avgy = avgy/self.psychopyWindow.size[1]
                     else:
                         avgx, avgy = np.nan, np.nan
 

@@ -102,7 +102,6 @@ class Experiment:
         happy = event.getKeys(keyList = ["y", "Y", "n", "N"])
         while happy == []:
             gpos = self.eyetracker.getLastGazePosition()
-            print("DEBUG gpos:", gpos)  # TEMPORARY - remove once diagnosed
             if type(gpos) in [tuple, list]:
                 circEyes.pos = [gpos[0]/self.psychopyWindow.size[1], gpos[1]/self.psychopyWindow.size[1]]
                 #print(gpos)
