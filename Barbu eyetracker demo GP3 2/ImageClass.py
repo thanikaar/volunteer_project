@@ -62,8 +62,11 @@ class ViennaFestival(Experiment):
         for i in range(0, len(self.items)):
             try:
                 self.items[i].draw()
-            except:
-                print("Could not draw item at index " + str(i))
+            except Exception as e:
+                # DEBUG: was a bare "except:" that swallowed the real error -
+                # printing it so silent draw failures (e.g. movie decode
+                # issues) are visible instead of just showing as a stall.
+                print("Could not draw item at index " + str(i) + ": " + repr(e))
         #for item in self.items:
         #    item.draw()
  
@@ -776,18 +779,28 @@ class ViennaFestival(Experiment):
                                           self.movieFolder + movieFilenames[trialNumber],
                                           size = (1920, 1080))
  
+                # Explicitly start playback. Relying on autoStart-on-first-draw
+                # is not reliable here - without this call, movie.status can
+                # sit at NOT_STARTED (0) forever even while draw() is being
+                # called every frame, which is what caused the stall in trial 1.
+                movie.play()
+ 
                 self.items.append(movie)
  
                 frameCount = 0
-                while movie.status != constants.FINISHED and not done:
+                lastStatus = None
+                while movie.status != constants.FINISHED and not getattr(movie, 'isFinished', False) and not done:
                     keys = event.getKeys(['q'])
                     if 'q' in keys:
                         quit_early = True
                         break
  
                     frameCount += 1
+                    if movie.status != lastStatus:  # DEBUG: log every status change, not just every 60 frames
+                        print(f"DEBUG trial={trialNumber} frame={frameCount} movie.status CHANGED {lastStatus} -> {movie.status} (FINISHED={constants.FINISHED})")
+                        lastStatus = movie.status
                     if frameCount % 60 == 0:  # TEMPORARY - remove once diagnosed
-                        print(f"DEBUG trial={trialNumber} frame={frameCount} movie.status={movie.status} (FINISHED={constants.FINISHED}) duration={movie.duration}")
+                        print(f"DEBUG trial={trialNumber} frame={frameCount} movie.status={movie.status} isFinished={getattr(movie, 'isFinished', 'n/a')} (FINISHED={constants.FINISHED}) duration={movie.duration}")
  
                     row = gazePositionToRow(trialNumber, "movie")
                     collecting_data.append(row)
