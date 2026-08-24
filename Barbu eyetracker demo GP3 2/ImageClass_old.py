@@ -131,14 +131,16 @@ class ViennaFestival(Experiment):
             kb = keyboard.Keyboard()
 
             for frame in range(3600):
-                gpos = self.eyetracker.getLastGazePosition()
-                if type(gpos) in [tuple, list]:
-                    avgx, avgy = gpos
-                    avgx = avgx/1080
-                    avgy = avgy/1080
-                    self.gazeDot.pos = (avgx, avgy)
+                gpos = self.eyetracker.getLastGazePosition()  
+                if type(gpos) in [tuple, list]:                
+                    avgx, avgy = gpos 
+
                 else:
                     avgx, avgy = np.nan, np.nan
+
+                avgx = avgx/1080
+                avgy = avgy/1080
+                self.gazeDot.pos = (avgx, avgy)
                 keys = event.getKeys(['space', 'q'])
 
                 if 'space' in keys:
@@ -579,13 +581,16 @@ class ViennaFestival(Experiment):
                     self.flip()
 
         def checkPersistence(cell):
+        
             for frame in range(10):
                 gpos = self.eyetracker.getLastGazePosition()
                 if type(gpos) in [tuple, list]:
                     avgx, avgy = gpos
                     avgx = avgx/1080
-                    avgy = avgy/1080
+                    avgy = avgy/1080    
                     self.gazeDot.pos = (avgx, avgy)
+    
+                # No else needed here cause you only need the else fallback when some later code, outside the if, still needs avgx/avgy to exist (even as a placeholder value like NaN)
 
                     currentCell = getGazeCell(avgx, avgy)
                     self.drawFlip()
@@ -698,30 +703,6 @@ class ViennaFestival(Experiment):
 
             return (avgx, avgy)
 
-        def gazeEventToRow(evt, trialNumber, eventLabel):
-            lx = evt.left_gaze_x
-            ly = evt.left_gaze_y
-            rx = evt.right_gaze_x
-            ry = evt.right_gaze_y
-
-            # 1. figure out lv/rv (1 if not NaN, else 0)
-            if not np.isnan(lx):
-                lv = 1
-            else:
-                lv = 0
-            if not np.isnan(rx):
-                rv = 1
-            else:
-                rv = 0
-            # 2. convert lx, ly, rx, ry into height-units (divide by 1080, same as everywhere else)
-            lx = lx/1080
-            ly = ly/1080
-            rx = rx/1080
-            ry = ry/1080
-            # 3. return a dict with keys: trialNumber, event, lv, rv, lx, ly, rx, ry
-            row_dict = {'trialNumber':trialNumber, 'event':eventLabel, 'lv':lv, 'rv':rv, 'lx':lx, 'ly':ly, 'rx':rx, 'ry':ry}
-            return row_dict
-
 
         print("\n")
         print("--------------------")
@@ -732,10 +713,38 @@ class ViennaFestival(Experiment):
         kb = keyboard.Keyboard()
         #kb.clearEvents()
 
+
         # Datafiles to write to
-        # (moved closer to where experimentFile is actually used, right before the CSV write)
-        #dateTime = str(datetime.datetime.now())[:10] + "_" + str(datetime.datetime.now())[11:13] + "." + str(datetime.datetime.now())[14:16]
-        #experimentFile = os.path.join("Data", "S1" + "_" + dateTime + "_eyeData.csv")
+
+        # pretty sure this doesn't work
+
+        # dateTime = str(datetime.datetime.now())[:10] + "_" + str(datetime.datetime.now())[11:13] + "." + str(datetime.datetime.now())[14:16]
+        # experimentFile = os.path.join("Data", "S1" + "_" + dateTime + "_eyeData.csv")
+
+        def gazeEventToRow(evt, trialNumber, eventLabel):
+                lx = evt.left_gaze_x
+                ly = evt.left_gaze_y
+                rx = evt.right_gaze_x
+                ry = evt.right_gaze_y
+
+                # 1. figure out lv/rv (1 if not NaN, else 0)
+                if not np.isnan(lx):
+                    lv = 1
+                else:
+                    lv = 0
+                if not np.isnan(rx):
+                    rv = 1
+                else:
+                    rv = 0
+                # 2. convert lx, ly, rx, ry into height-units (divide by 1080, same as everywhere else)           
+                lx = lx/1080
+                ly = ly/1080
+                rx = rx/1080
+                ry = ry/1080
+                # 3. return a dict with keys: trialNumber, event, lv, rv, lx, ly, rx, ry
+                row_dict = {'trialNumber':trialNumber, 'event':eventLabel, 'lv':lv, 'rv':rv, 'lx':lx, 'ly':ly, 'rx':rx, 'ry':ry}
+
+                return row_dict
 
         # Start eyetracker
         if self.eyetracker:
@@ -754,7 +763,6 @@ class ViennaFestival(Experiment):
         movie3 = visual.MovieStim(self.psychopyWindow,
                                  self.movieFolder + 'test2.mov',
                                  size = (1920, 1080))
-
         collecting_data = []
 
         # For-loop for all trials
@@ -791,8 +799,8 @@ class ViennaFestival(Experiment):
             # ====================================================================
             # MOVIE
             # ====================================================================
-            #if self.eyetracker:                    #TODO FIX
-                #self.eyetracker.setCurrentEvent("movie")
+            # if self.eyetracker:                               #TODO FIX
+            #     self.eyetracker.setCurrentEvent("movie")
 
             done = False
 
@@ -820,9 +828,8 @@ class ViennaFestival(Experiment):
 
             movie.pause()
 
-            # OLD (Tobii SDK) approach — kept for reference only, does not work with the
-            # iohub/Gazepoint tracker (writeToFile/setCurrentEvent don't exist on self.eyetracker).
-            # Superseded by collecting_data + gazeEventToRow() above and the CSV write below.
+            # this is the tobii version
+
             # Write data at the end of the trial
             #if self.eyetracker:
                 #self.eyetracker.setCurrentEvent("endTrial")
@@ -831,19 +838,24 @@ class ViennaFestival(Experiment):
                 #self.eyetracker.updateSystemTimestamp()
                 #self.eyetracker.clearGazeData()
 
+
+            
             self.items.remove(movie)
 
         if self.eyetracker:
             self.eyetracker.setRecordingState(False)
 
-        # Write the collected gaze data to a CSV file
+        # updated version
+
+        # Write data at the end of the trial
+        data_df = pd.DataFrame(collecting_data) # this uses dict keys as column names 
+        os.makedirs("Data", exist_ok=True)
+
         dateTime = str(datetime.datetime.now())[:10] + "_" + str(datetime.datetime.now())[11:13] + "." + str(datetime.datetime.now())[14:16]
         experimentFile = os.path.join("Data", "S1" + "_" + dateTime + "_eyeData.csv")
 
-        data_df = pd.DataFrame(collecting_data) # this uses dict keys as column names
-        os.makedirs("Data", exist_ok=True)
         data_df.to_csv(experimentFile, index=False)
-
+        
         pause()
 
         # =============================================================================
@@ -1071,8 +1083,9 @@ class ViennaFestival(Experiment):
                 for frame in range(durationFixation):
                     if 'q' in keys:
                         break
-
+                    
                     gpos = self.eyetracker.getLastGazePosition()
+
                     if type(gpos) in [tuple, list]:
                         avgx, avgy = gpos
                         avgx = avgx/1080

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+# "Experiment" class: eyetracker setup + calibration
+
+
 """
 Created on Thu Oct 14 15:50:36 2021
 Updated on Tue Apr 14 2026
@@ -25,6 +29,8 @@ class Experiment:
 
         if usingEyetracker:
             self.usingEyetracker = True
+
+            # iohub_config.yaml Declares the monitor, keyboard, mouse — and critically, the eyetracker.hw.gazepoint.gp3.EyeTracker block (enable: True), which is the one active tracker definition (other trackers like SMI/LC Technologies are commented out). This file is what makes launchHubServer actually talk to your specific GP3 device.
 
             self.io=launchHubServer(iohub_config_name='iohub_config.yaml') # you are reliant on an external .yaml file.
             #This .yaml file contains information about both the monitor and the eye-tracker. The program will not work without it, and it must be named exactly this.
@@ -102,9 +108,8 @@ class Experiment:
         happy = event.getKeys(keyList = ["y", "Y", "n", "N"])
         while happy == []:
             gpos = self.eyetracker.getLastGazePosition()
-            print("DEBUG gpos:", gpos)  # TEMPORARY - remove once diagnosed
             if type(gpos) in [tuple, list]:
-                circEyes.pos = [gpos[0]/self.psychopyWindow.size[1], gpos[1]/self.psychopyWindow.size[1]]
+                circEyes.pos = [gpos[0]/resolution[1], gpos[1]/resolution[1]]
                 #print(gpos)
             else:
                 circEyes.pos = [0,0]
